@@ -1,0 +1,7 @@
+org/iit/weather/DistrictMonthlyStats$ReducerClass.class
+org/iit/weather/MaxPrecipitation.class
+org/iit/weather/MaxPrecipitation$MapperClass.class
+org/iit/weather/PreprocessWeather.class
+org/iit/weather/MaxPrecipitation$ReducerClass.class
+org/iit/weather/DistrictMonthlyStats.class
+org/iit/weather/DistrictMonthlyStats$MapperClass.class
