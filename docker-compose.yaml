@@ -1,17 +1,21 @@
-# docker-compose.yml
 version: "3.8"
 
 services:
+
+  # =====================
+  # HADOOP SERVICES
+  # =====================
+
   namenode:
     image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
     container_name: namenode
     restart: always
     ports:
-      - "9870:9870" # NameNode Web UI
-      - "9000:9000" # FS Default
+      - "9870:9870"
+      - "9000:9000"
     volumes:
       - hadoop_namenode:/hadoop/dfs/name
-      - /home/iitgcpuser/weather-data-analytics/mapreduce/resources:/opt/hadoop/resources
+      - /home/iitgcpuser/weather-data-analytics/mapreduce/target:/opt/hadoop/resources
     environment:
       - CLUSTER_NAME=test
     env_file:
@@ -58,7 +62,7 @@ services:
       - datanode1
       - datanode2
     ports:
-      - "8088:8088" # ResourceManager Web UI
+      - "8088:8088"
     environment:
       SERVICE_PRECONDITION: "namenode:9000 namenode:9870 datanode1:9864 datanode2:9864"
     env_file:
@@ -92,10 +96,129 @@ services:
     networks:
       - hadoop
 
+  # -------------------------
+  # HIVE SERVICES
+  # -------------------------
+
+  metastore-db:
+    image: postgres:11
+    container_name: metastore-db
+    environment:
+      POSTGRES_DB: metastore
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+    ports:
+      - "5432:5432"
+    volumes:
+      - metastore_db:/var/lib/postgresql/data
+    networks:
+      - hadoop
+
+  hive-metastore-init:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: hive-metastore-init
+    depends_on:
+      - metastore-db
+      - namenode
+    env_file:
+      - ./hive.env
+    entrypoint: >
+      bash -c '
+      echo "Checking if Hive schema exists...";
+      TABLE_COUNT=$$(psql -h metastore-db -U hive -d metastore -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='\''public'\''");
+      if [ "$$TABLE_COUNT" -eq 0 ]; then
+          echo "No schema found → Initializing Hive schema...";
+          schematool -dbType postgres -initSchema --verbose;
+      else
+          echo "Schema already exists → Skipping initialization.";
+      fi
+      '
+    networks:
+      - hadoop
+
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: hive-metastore
+    depends_on:
+      - hive-metastore-init
+    env_file:
+      - ./hive.env
+    command: /opt/hive/bin/hive --service metastore
+    ports:
+      - "9083:9083"
+    networks:
+      - hadoop
+
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: hive-server
+    depends_on:
+      - hive-metastore
+    env_file:
+      - ./hive.env
+    command: /opt/hive/bin/hiveserver2
+    ports:
+      - "10000:10000"
+    networks:
+      - hadoop
+
+  # =====================
+  # SPARK SERVICES
+  # =====================
+
+  spark-master:
+    image: spark:3.5.0
+    container_name: spark-master
+    hostname: spark-master
+    command: ["/opt/spark/sbin/start-master.sh"]
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./spark:/spark-scripts
+    networks:
+      - hadoop
+
+  spark-worker:
+    image: spark:3.5.0
+    container_name: spark-worker
+    hostname: spark-worker
+    depends_on:
+      - spark-master
+    command: ["/opt/spark/sbin/start-worker.sh", "spark://spark-master:7077"]
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    networks:
+      - hadoop
+
+  # =====================
+  # ZEPPELIN SERVICE
+  # =====================
+
+  zeppelin:
+    image: apache/zeppelin:0.10.1
+    container_name: zeppelin
+    platform: linux/amd64
+    restart: always
+    ports:
+      - "8081:8080"
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - ZEPPELIN_LOG_DIR=/logs
+      - ZEPPELIN_NOTEBOOK_DIR=/notebook
+    volumes:
+      - ./zeppelin/notebook:/notebook
+      - ./zeppelin/logs:/logs
+    networks:
+      - hadoop
+
 volumes:
   hadoop_namenode:
   hadoop_datanode1:
   hadoop_datanode2:
+  metastore_db:
 
 networks:
   hadoop:

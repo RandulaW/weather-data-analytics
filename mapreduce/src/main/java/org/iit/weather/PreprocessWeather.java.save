@@ -1,0 +1,93 @@
+
+package org.iit.weather;
+
+import java.io.*;
+import java.util.*;
+
+/**
+ * PreprocessWeather
+ * -----------------
+ * Preprocess the raw datasets for Hadoop MapReduce.
+ *
+ * INPUT FILES:
+ *   data/weatherData.csv
+ *   data/locationData.csv
+ *
+ * OUTPUT FILE:
+ *   data/weather_preprocessed.csv
+ *
+ * OUTPUT FORMAT:
+ *   district,year,month,precipitation_hours,temperature_mean
+ */
+public class PreprocessWeather {
+
+    public static void main(String[] args) throws Exception {
+
+        // Step 1: Load location_id -> city_name mapping
+        // (city_name is treated as district for this analysis)
+        Map<String, String> locationMap = new HashMap<>();
+
+        BufferedReader locReader =
+                new BufferedReader(new FileReader("data/locationData.csv"));
+
+        String line;
+        locReader.readLine(); // skip header
+
+        while ((line = locReader.readLine()) != null) {
+            String[] parts = line.split(",");
+            String locationId = parts[0];
+            String cityName = parts[7]; // city_name column
+            locationMap.put(locationId, cityName);
+        }
+        locReader.close();
+
+        // Step 2: Read weather data and write flattened output
+        BufferedReader weatherReader =
+                new BufferedReader(new FileReader("data/weatherData.csv"));
+
+        BufferedWriter writer =
+                new BufferedWriter(new FileWriter("data/weather_preprocessed.csv"));
+
+        // Write output header
+        writer.write("district,year,month,precipitation_hours,temperature_mean\n");
+
+        weatherReader.readLine(); // skip header
+
+        while ((line = weatherReader.readLine()) != null) {
+
+            String[] parts = line.split(",");
+
+            String locationId = parts[0];
+            String date = parts[1];              // format: M/D/YYYY
+            String tempMean = parts[5];          // temperature_2m_mean
+            String precipHours = parts[13];      // precipitation_hours
+
+            String district = locationMap.get(locationId);
+            if (district == null) continue; // skip unmatched records
+
+            // Extract year and month from date
+            String[] dateParts = date.split("/");
+            String month = dateParts[0];
+            String year = dateParts[2];
+
+            int yearInt = Integer.parseInt(year);
+
+            // Keep only last decade (2015–2025)
+            if (yearInt < 2015) {
+            	return;
+	    }
+
+            // Write cleaned record
+            writer.write(
+                district + "," +
+                year + "," +
+                month + "," +
+                precipHours + "," +
+                tempMean + "\n"
+            );
+        }
+
+        weatherReader.close();
+        writer.close();
+    }
+}
