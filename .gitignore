@@ -23,6 +23,6 @@
 hs_err_pid*
 replay_pid*
 
-# Zeppelin runtime (DO NOT COMMIT)
+# Zeppelin runtime
 zeppelin/notebook/
 zeppelin/logs/
