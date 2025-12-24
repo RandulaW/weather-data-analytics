@@ -86,10 +86,12 @@ public class DistrictMonthlyStats {
      *   1. Raw structured dataset (CSV) → for Power BI
      *   2. Sentence-based output → for reporting
      */
+
     public static class ReducerClass
             extends Reducer<Text, Text, NullWritable, Text> {
 
         private MultipleOutputs<NullWritable, Text> multipleOutputs;
+        private boolean headerWritten = false;
 
         @Override
         protected void setup(Context context) {
@@ -99,6 +101,16 @@ public class DistrictMonthlyStats {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context)
                 throws java.io.IOException, InterruptedException {
+
+            // ---------- WRITE HEADER ONCE ----------
+            if (!headerWritten) {
+                multipleOutputs.write(
+                    "raw",
+                    NullWritable.get(),
+                    new Text("district,year,month,total_precipitation,mean_temperature")
+                );
+                headerWritten = true;
+            }
 
             double totalPrecip = 0;
             double tempSum = 0;
@@ -118,9 +130,7 @@ public class DistrictMonthlyStats {
             String year = k[1];
             int month = Integer.parseInt(k[2]);
 
-            /* =======================
-             * RAW DATASET
-             * ======================= */
+            // ---------- RAW CSV OUTPUT ----------
             String rawRecord =
                 district + "," +
                 year + "," +
@@ -134,9 +144,7 @@ public class DistrictMonthlyStats {
                 new Text(rawRecord)
             );
 
-            /* =======================
-             * SENTENCE OUTPUT
-             * ======================= */
+            // ---------- SENTENCE OUTPUT ----------
             String suffix =
                 (month == 1) ? "st" :
                 (month == 2) ? "nd" :
